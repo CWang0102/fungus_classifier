@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>API — Fungus Image Classification</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css" />
+    <style>
+      .brand-link {
+        text-decoration: none;
+        color: inherit;
+        font-weight: inherit;
+      }
+
+      .brand-link:hover {
+        text-decoration: underline;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="container-fluid">
+      <ul>
+        <li><a href="./index.html" class="brand-link"><strong>Fungus Classifier</strong></a></li>
+      </ul>
+      <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="about.html">About</a></li>
+      </ul>
+    </nav>
+
+    <main class="container">
+      <section>
+        <hgroup>
+          <h2>Fungus Image Classification API</h2>
+          <h3>Upload fungus images and receive classification with CAM visualization</h3>
+        </hgroup>
+        <p>
+          This API allows you to upload fungus images (single, batch, or compressed archives)
+          and receive structured analysis results with Grad-CAM visualizations. It is suitable for research pipelines,
+          automation workflows, and backend services.
+        </p>
+
+        <h3>Base Information</h3>
+        <ul>
+          <li><strong>Version:</strong> 0.1.0</li>
+          <li><strong>Base URL:</strong> https://yourdomain.com</li>
+          <li><strong>Content Types:</strong> multipart/form-data, application/json</li>
+        </ul>
+
+        <h3>Health & Status</h3>
+        
+        <h4>Root Status Check</h4>
+        <pre><code>GET /</code></pre>
+        <p>Returns API status information.</p>
+
+        <h4>Health Check</h4>
+        <pre><code>GET /health</code></pre>
+        <p>Returns a health check response indicating service availability.</p>
+
+        <h3>Endpoints</h3>
+
+        <h4>1. Upload Single Image</h4>
+        <pre><code>POST /upload</code></pre>
+        <p>Upload and analyse a single fungus image.</p>
+        
+        <h5>Request</h5>
+        <pre><code>curl -X POST https://yourdomain.com/upload \
+  -F "file=@/path/to/fungus_image.jpg"</code></pre>
+
+        <h5>Successful Response (200)</h5>
+        <pre><code>{
+  "upload_id": "550e8400-e29b-41d4-a716-446655440000",
+  "upload_time": "2026-02-08T09:15:00Z",
+  "analysis": [
+    {
+      "filename": "fungus_image.jpg",
+      "predicted_class": "Aspergillus",
+      "image_data": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
+      "cam_data": "data:image/png;base64,iVBORw0KGgo..."
+    }
+  ],
+  "processing_time": 0.42
+}</code></pre>
+
+        <h4>2. Upload Multiple Images (Batch)</h4>
+        <pre><code>POST /upload/batch</code></pre>
+        <p>Upload and analyse multiple images in a single request.</p>
+        
+        <h5>Request</h5>
+        <pre><code>curl -X POST https://yourdomain.com/upload/batch \
+  -F "files=@img1.jpg" \
+  -F "files=@img2.jpg" \
+  -F "files=@img3.jpg"</code></pre>
+
+        <h5>Successful Response (200)</h5>
+        <pre><code>{
+  "upload_id": "650e8400-e29b-41d4-a716-446655440001",
+  "upload_time": "2026-02-08T09:20:00Z",
+  "analysis": [
+    {
+      "filename": "img1.jpg",
+      "predicted_class": "Aspergillus",
+      "image_data": "data:image/jpeg;base64,...",
+      "cam_data": "data:image/png;base64,..."
+    },
+    {
+      "filename": "img2.jpg",
+      "predicted_class": "Penicillium",
+      "image_data": "data:image/jpeg;base64,...",
+      "cam_data": "data:image/png;base64,..."
+    }
+  ],
+  "processing_time": 1.24
+}</code></pre>
+
+        <h4>3. Upload Compressed Archive</h4>
+        <pre><code>POST /upload/compressed</code></pre>
+        <p>Upload a compressed archive (.zip, .tar, .tar.gz) containing fungus images.</p>
+        
+        <h5>Request</h5>
+        <pre><code>curl -X POST https://yourdomain.com/upload/compressed \
+  -F "file=@fungus_images.zip"</code></pre>
+
+        <h5>Response</h5>
+        <p>Returns the same structure as batch upload, with analysis results for all images found in the archive.</p>
+
+        <h3>Response Schema</h3>
+        
+        <h4>AnalysisResponse</h4>
+        <ul>
+          <li><strong>upload_id</strong> (UUID): Unique identifier for this upload</li>
+          <li><strong>upload_time</strong> (ISO 8601 datetime): Timestamp of upload</li>
+          <li><strong>analysis</strong> (array of ImageAnalysis): Analysis results for each image</li>
+          <li><strong>processing_time</strong> (number): Total processing time in seconds</li>
+        </ul>
+
+        <h4>ImageAnalysis</h4>
+        <ul>
+          <li><strong>filename</strong> (string): Original filename</li>
+          <li><strong>predicted_class</strong> (string): Predicted fungus classification</li>
+          <li><strong>image_data</strong> (string): Base64-encoded original image (data URI format)</li>
+          <li><strong>cam_data</strong> (string): Base64-encoded Grad-CAM visualization (data URI format)</li>
+        </ul>
+
+        <h3>Error Handling</h3>
+        <p>Validation errors return HTTP 422 with structured details:</p>
+        <pre><code>{
+  "detail": [
+    {
+      "loc": ["body", "file"],
+      "msg": "Field required",
+      "type": "value_error.missing"
+    }
+  ]
+}</code></pre>
+
+        <h3>Usage Notes</h3>
+        <ul>
+          <li>All image uploads must be provided as multipart/form-data.</li>
+          <li>Accepted image formats: JPEG, PNG, and other common formats.</li>
+          <li>Batch and compressed uploads return a single aggregated response with multiple analysis results.</li>
+          <li>The <code>image_data</code> and <code>cam_data</code> fields contain base64-encoded images in data URI format, ready for display in HTML <code>&lt;img&gt;</code> tags.</li>
+          <li>Large archives or batches may increase processing time proportionally.</li>
+          <li>Compressed archives are extracted server-side; all valid image files will be processed.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="container">
+      <small><a href="/index.html" role="button">Home</a> • <a href="/about.html">About</a></small>
+    </footer>
+  </body>
+</html>

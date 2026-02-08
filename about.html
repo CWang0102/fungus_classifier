@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>About — Fungus Classifier</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css" />
+  </head>
+  <body>
+    <nav class="container-fluid">
+      <ul>
+        <li><a href="./index.html" class="brand-link"><strong>Fungus Classifier</strong></a></li>
+      </ul>
+      <ul>
+        <li><a href="./index.html">Home</a></li>
+        <li><a href="./api.html">API</a></li>
+      </ul>
+    </nav>
+
+    <main class="container">
+    <div class="grid">
+        <section>
+        <hgroup>
+            <h2>About This Project</h2>
+            <h3>AI-powered Fungus Classification</h3>
+        </hgroup>
+
+        <p>
+            The Classifier is a machine learning-powered tool designed to identify and classify various types of fungi from uploaded images.
+            It uses a custom-trained model on fungal species, focusing on characteristics such as cap shape, color, size, and other key traits.
+        </p>
+
+        <h3>At a Glance</h3>
+        <ul>
+            <li>
+            <strong>Number of classes:</strong>
+            13 distinct fungal categories with varying visual characteristics.
+            </li>
+            <li>
+            <strong>Model type:</strong>
+            Convolutional Neural Network (CNN) with a custom multi-head architecture, sharing a common feature extractor across prediction tasks.
+            </li>
+            <li>
+            <strong>Best performance:</strong>
+            Macro F1-score of <strong>0.847</strong>, reflecting performance across all classes. Accuracy of <strong> 0.775 </strong>, reflecting the overall performance.
+            </li>
+        </ul>
+
+        <h3>Technology Stack</h3>
+        <p>
+        The project is implemented in Python using PyTorch for deep learning development.
+        It is built on a ResNet-18 CNN backbone adapted for multi-attribute image classification by replacing the final fully connected layer with multiple parallel linear heads, each predicting a specific visual attribute.
+        Training uses transfer learning, with attribute classifiers trained separately before fine-tuning the shared backbone to improve overall performance and generalisation.
+        </p>
+
+
+
+        <h3>Model Performance</h3>
+
+        <p>
+        To better understand how the classifier performs across different fungal categories,
+        we evaluate accuracy on a per-class basis. This helps reveal whether the model performs
+        consistently or struggles with specific classes.
+        </p>
+
+        <figure>
+        <img
+            src="per_class_accuracy.png"
+            alt="Bar chart showing per-class accuracy for 13 fungal classes"
+            loading="lazy"
+        />
+        <figcaption>
+            Per-class accuracy across all 13 fungal categories.
+        </figcaption>
+        </figure>
+
+        <p>
+        As shown above, several classes achieve near-perfect accuracy, indicating that their
+        visual features are highly distinctive and well captured by the model. Other classes
+        show lower accuracy, typically due to visual similarity between species, limited training
+        samples, or higher intra-class variation.
+        </p>
+
+        <h3>Model Training Process</h3>
+
+        <p>
+        The model is trained in two distinct stages to balance representation learning and task-specific performance.
+        Each stage follows a different optimisation objective and exhibits different learning dynamics, as shown below.
+        </p>
+
+        <h4>Stage 1 — Training the Attribute Classifiers</h4>
+
+        <p>
+        In the first stage, the attribute classifier heads are trained using transfer learning with a frozen or partially frozen backbone.
+        This phase focuses on learning decision boundaries for specific visual attributes (such as cap shape, color, and other fungal characteristics)
+        based on features extracted from the pretrained model.
+        </p>
+
+        <figure>
+        <img
+            src="train_vs_validation_loss_model_2.png"
+            alt="Training and validation loss during classifier training"
+            loading="lazy"
+        />
+        <figcaption>
+            <strong>Figure 1.</strong> Training and validation loss during attribute classifier training.
+            Both curves decrease steadily, indicating stable optimisation with limited overfitting.
+            The selected epoch corresponds to the lowest validation loss.
+        </figcaption>
+        </figure>
+
+        <p>
+        The classifier training shows stable convergence and a relatively small gap between training and validation loss,
+        suggesting that the pretrained representations provide a good foundation for learning fungal attributes.
+        </p>
+
+        <h4>Stage 2 — Fine-Tuning the Base Model</h4>
+
+        <p>
+        In the second stage, the shared convolutional backbone is fine-tuned after the initial attribute-head training.
+        The goal is to adapt high-level visual representations to the fungal domain while preserving general features
+        learned from pretraining, improving overall performance and generalisation across all attribute prediction tasks.
+        </p>
+
+        <figure>
+        <img
+            src="train_vs_validation_loss_best_epoch.png"
+            alt="Training and validation loss during fine-tuning of the base model"
+            loading="lazy"
+        />
+        <figcaption>
+            <strong>Figure 2.</strong> Training and validation loss during backbone fine-tuning.
+            Validation loss reaches its minimum around the early-stopping point, after which overfitting becomes evident
+            as training loss continues to decrease while validation loss rises.
+        </figcaption>
+        </figure>
+
+        <p>
+        Early stopping is applied to prevent overfitting once the validation loss stops improving.
+        This ensures that the shared feature extractor generalises well and provides improved representations
+        for the final attribute classification tasks.
+        </p>
+
+
+        </section>
+    </div>
+    </main>
+
+
+    <section aria-label="Subscribe example">
+      <div class="container">
+        <article>
+          <hgroup>
+            <h2>Get Updates</h2>
+            <h3>We'll notify you when we improve the classifier or launch new features.</h3>
+          </hgroup>
+          <form class="grid">
+            <input type="text" name="firstname" placeholder="Your name" aria-label="First name" required />
+            <input type="email" name="email" placeholder="Your email" aria-label="Email address" required />
+            <button type="submit" onclick="event.preventDefault()">Subscribe</button>
+          </form>
+        </article>
+      </div>
+    </section>
+
+    <footer class="container">
+      <small><a href="/">Home</a> • <a href="/api.html">API</a></small>
+    </footer>
+  </body>
+</html>
