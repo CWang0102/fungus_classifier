@@ -156,7 +156,7 @@
       <div id="waitingOverlay" class="hidden">
     <div>
       <div class="spinner"></div>
-      <p>Processing… Please wait.</p>
+      <p>Processing… Please wait. Do not refresh.</p>
     </div>
   </div>
 
@@ -243,7 +243,7 @@
       </div>
     </section>
     <script>
-    const API_BASE_URL = "http://localhost:8000";
+    const API_BASE_URL = "https://wch-38525--fungus-classification-api-fastapi-app.modal.run";
     const btn = document.getElementById("getStartedBtn");
     const form = document.getElementById("imageUploadForm");
     const fileInput = document.getElementById("uploadFile");
@@ -257,7 +257,8 @@
     const ARCHIVE_EXTS = [".zip", ".tar", ".tar.gz", ".tgz"];
 
     const MAX_IMAGE_SIZE = 10 * 1024 * 1024;      // 10 MB
-    const MAX_ARCHIVE_SIZE = 200 * 1024 * 1024;  // 200 MB
+    const MAX_ARCHIVE_SIZE = 500 * 1024 * 1024;  // 500 MB
+    const FETCH_TIMEOUT_MS = 5 * 60 * 1000;      // 5 minutes
 
     function showWaitingScreen() {
         waitingOverlay.classList.remove("hidden");
@@ -270,7 +271,6 @@
     }
 
     function showImageModal(originalImageData, camImageData) {
-        // Both imageData are data URIs (data:image/jpeg;base64,...)
         modalImageOriginal.src = originalImageData;
         modalImageCAM.src = camImageData;
         imageModal.classList.remove("hidden");
@@ -337,10 +337,8 @@
     }
 
     function displayResults(data) {
-        // Clear previous results
         resultContainer.innerHTML = '';
 
-        // Get the analysis array from the API response
         const results = data.analysis || [];
         
         if (!results || results.length === 0) {
@@ -348,22 +346,20 @@
             return;
         }
 
-        // Display each result
         results.forEach(item => {
             const resultDiv = document.createElement('div');
             resultDiv.className = 'result-item';
             
             const filename = item.filename || item.name || 'Unknown file';
             const predictedClass = item.predicted_class || item.class || item.prediction || 'Unknown';
-            const imageData = item.image_data || '';  // Base64 data URI
-            const camData = item.cam_data || '';      // Base64 data URI for CAM
+            const imageData = item.image_data || '';
+            const camData = item.cam_data || '';
             
             resultDiv.innerHTML = `
                 <div class="filename">${filename}</div>
                 <div class="class">Class: ${predictedClass}</div>
             `;
             
-            // Add click handler to filename
             const filenameDiv = resultDiv.querySelector('.filename');
             if (imageData && camData) {
                 filenameDiv.style.cursor = 'pointer';
@@ -378,7 +374,6 @@
             resultContainer.appendChild(resultDiv);
         });
 
-        // Optionally show processing time if needed
         if (data.processing_time) {
             const footer = document.createElement('p');
             footer.style.marginTop = '1rem';
@@ -386,6 +381,37 @@
             footer.style.color = 'var(--muted-color)';
             footer.textContent = `Processed in ${data.processing_time.toFixed(2)} seconds`;
             resultContainer.appendChild(footer);
+        }
+    }
+
+    // ---- fetch with timeout + single retry on network failure ----
+    async function fetchWithTimeout(url, options, timeoutMs = FETCH_TIMEOUT_MS) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal,
+            });
+            return response;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    async function fetchWithRetry(url, options, { timeoutMs = FETCH_TIMEOUT_MS, retries = 1 } = {}) {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                return await fetchWithTimeout(url, options, timeoutMs);
+            } catch (err) {
+                const isLastAttempt = attempt === retries;
+                // Only retry on network / abort errors, not HTTP errors
+                if (isLastAttempt) throw err;
+                console.warn(`Attempt ${attempt + 1} failed (${err.message}), retrying…`);
+                // Brief pause before retry to let cold-start finish
+                await new Promise(r => setTimeout(r, 2000));
+            }
         }
     }
 
@@ -404,7 +430,7 @@
 
     if (!result.ok) {
         warnUser(result.message);
-        fileInput.value = "";   // always reset invalid input
+        fileInput.value = "";
         return;
     }
 
@@ -437,25 +463,28 @@
     try {
         const fullUrl = `${API_BASE_URL || ''}${result.endpoint}`;
         console.log("Attempting to fetch:", fullUrl);
-        console.log("Method: POST");
         console.log("File:", file.name, file.size, "bytes");
         
-        const response = await fetch(fullUrl, {
+        const response = await fetchWithRetry(fullUrl, {
             method: "POST",
-            body: formData
+            body: formData,
         });
         
-        console.log("Response received:", response);
+        console.log("Response received:", response.status);
 
         if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || "Upload failed");
+            const err = await response.json();
+            throw new Error(err.detail || "Upload failed");
         }
 
         const data = await response.json();
         displayResults(data);
     } catch (err) {
-        warnUser(`Error: ${err.message}`);
+        if (err.name === "AbortError") {
+            warnUser("Request timed out. The server may be starting up — please try again in a moment.");
+        } else {
+            warnUser(`Error: ${err.message}`);
+        }
         fileInput.value = "";
     } finally {
         hideWaitingScreen();
