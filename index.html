@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fungus Classifier</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css"
+    />
+    <style>
+   #waitingOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    }
+
+    #waitingOverlay:not(.hidden) {
+    display: flex;
+    }
+
+    .hidden {
+    display: none;
+    }
+
+    .spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(0, 0, 0, 0.15);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 1rem;
+    }
+
+    @keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+    }
+    #waitingOverlay p {
+    color: var(--color);
+    }
+
+    .result-item {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background-color: var(--card-background-color);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--muted-border-color);
+    }
+
+    .result-item .filename {
+    font-weight: bold;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    text-decoration: underline;
+    }
+
+    .result-item .filename:hover {
+    opacity: 0.8;
+    }
+
+    .result-item .class {
+    color: var(--color);
+    }
+
+    /* Modal styles */
+    #imageModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.9);
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    cursor: pointer;
+    padding: 20px;
+    overflow-y: auto;
+    }
+
+    #imageModal:not(.hidden) {
+    display: flex;
+    }
+
+    #imageModal .modal-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    max-width: 95vw;
+    cursor: default;
+    }
+
+    #imageModal .images-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    width: 100%;
+    }
+
+    #imageModal .image-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: center;
+    }
+
+    #imageModal .image-label {
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 6px 12px;
+    border-radius: 4px;
+    }
+
+    #imageModal img {
+    max-width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+    background: white;
+    }
+
+    #imageModal .close-hint {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    color: white;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    pointer-events: none;
+    z-index: 10001;
+    }
+
+    @media (max-width: 768px) {
+        #imageModal .images-container {
+            grid-template-columns: 1fr;
+        }
+        
+        #imageModal img {
+            max-height: 50vh;
+        }
+    }
+
+  </style>
+  </head>
+  <body>
+      <div id="waitingOverlay" class="hidden">
+    <div>
+      <div class="spinner"></div>
+      <p>Processing… Please wait. Do not refresh.</p>
+    </div>
+  </div>
+
+  <!-- Image Modal -->
+  <div id="imageModal" class="hidden">
+    <div class="close-hint">Click anywhere to close</div>
+    <div class="modal-content">
+      <div class="images-container">
+        <div class="image-wrapper">
+          <div class="image-label">Original Image</div>
+          <img id="modalImageOriginal" src="" alt="Original Fungus Image" />
+        </div>
+        <div class="image-wrapper">
+          <div class="image-label">Class Activation Map (CAM)</div>
+          <img id="modalImageCAM" src="" alt="CAM Visualization" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <nav class="container-fluid">
+      <ul>
+        <li><a href="./index.html" class="brand-link"><strong>Fungus Classifier</strong></a></li>
+      </ul>
+      <ul>
+        <li><a href="./about.html">About</a></li>
+        <li><a href="./api.html">API</a></li>
+        <li>
+        <button id="getStartedBtn" type="button" class="contrast">
+        Get Started
+        </button>
+
+        </li>
+
+      </ul>
+    </nav>
+
+    <main class="container">
+      <div class="grid">
+        <section>
+          <hgroup>
+            <h2>Upload a Fungus Image</h2>
+            <h3>Get species classification and key details</h3>
+          </hgroup>
+          <p>
+            Select an image of a fungus for classification. The backend will
+            process and return key information. If multiple images require classification, compress them into an archive and upload the archive instead.
+          </p>
+
+          <form id="imageUploadForm" enctype="multipart/form-data">
+            <input
+            type="file"
+            id="uploadFile"
+            name="file"
+            accept="image/*,.zip,.tar,.tar.gz,.tgz"
+            required
+            />
+            <button type="submit">Upload & Analyze</button>
+          </form>
+
+          <div id="result" style="margin-top: 2rem">
+            <h3>Analysis Result</h3>
+            <div id="analysisText">
+              <p>The classification result will appear here after processing.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <section aria-label="Subscribe example">
+      <div class="container">
+        <article>
+          <hgroup>
+            <h2>Get Updates</h2>
+            <h3>We'll notify you when we improve the classifier or launch new features.</h3>
+          </hgroup>
+          <form class="grid">
+            <input type="text" name="firstname" placeholder="Your name" aria-label="First name" required />
+            <input type="email" name="email" placeholder="Your email" aria-label="Email address" required />
+            <button type="submit" onclick="event.preventDefault()">Subscribe</button>
+          </form>
+        </article>
+      </div>
+    </section>
+    <script>
+    const API_BASE_URL = "https://wch-38525--fungus-classification-api-fastapi-app.modal.run";
+    const btn = document.getElementById("getStartedBtn");
+    const form = document.getElementById("imageUploadForm");
+    const fileInput = document.getElementById("uploadFile");
+    const resultContainer = document.getElementById("analysisText");
+    const waitingOverlay = document.getElementById("waitingOverlay");
+    const imageModal = document.getElementById("imageModal");
+    const modalImageOriginal = document.getElementById("modalImageOriginal");
+    const modalImageCAM = document.getElementById("modalImageCAM");
+
+    const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".bmp", ".webp"];
+    const ARCHIVE_EXTS = [".zip", ".tar", ".tar.gz", ".tgz"];
+
+    const MAX_IMAGE_SIZE = 10 * 1024 * 1024;      // 10 MB
+    const MAX_ARCHIVE_SIZE = 500 * 1024 * 1024;  // 500 MB
+    const FETCH_TIMEOUT_MS = 5 * 60 * 1000;      // 5 minutes
+
+    function showWaitingScreen() {
+        waitingOverlay.classList.remove("hidden");
+        document.body.style.overflow = "hidden";
+    }
+
+    function hideWaitingScreen() {
+        waitingOverlay.classList.add("hidden");
+        document.body.style.overflow = "";
+    }
+
+    function showImageModal(originalImageData, camImageData) {
+        modalImageOriginal.src = originalImageData;
+        modalImageCAM.src = camImageData;
+        imageModal.classList.remove("hidden");
+        document.body.style.overflow = "hidden";
+    }
+
+    function hideImageModal() {
+        imageModal.classList.add("hidden");
+        document.body.style.overflow = "";
+        modalImageOriginal.src = "";
+        modalImageCAM.src = "";
+    }
+
+    // Close modal when clicking on the overlay (but not the content itself)
+    imageModal.addEventListener("click", (e) => {
+        if (e.target === imageModal) {
+            hideImageModal();
+        }
+    });
+
+    // Also close on ESC key
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !imageModal.classList.contains("hidden")) {
+            hideImageModal();
+        }
+    });
+
+    function warnUser(message) {
+    alert(message);
+    resultContainer.innerHTML = `<p>${message}</p>`;
+    }
+
+    function validateSelectedFile(file) {
+    if (!file) {
+        return { ok: false, message: "No file selected" };
+    }
+
+    const name = file.name.toLowerCase();
+
+    if (IMAGE_EXTS.some(ext => name.endsWith(ext))) {
+        if (file.size > MAX_IMAGE_SIZE) {
+        return {
+            ok: false,
+            message: `Image is too large. Max allowed size is ${MAX_IMAGE_SIZE / 1024 / 1024} MB.`
+        };
+        }
+        return { ok: true, endpoint: "/upload", kind: "image" };
+    }
+
+    if (ARCHIVE_EXTS.some(ext => name.endsWith(ext))) {
+        if (file.size > MAX_ARCHIVE_SIZE) {
+        return {
+            ok: false,
+            message: `Archive is too large. Max allowed size is ${MAX_ARCHIVE_SIZE / 1024 / 1024} MB.`
+        };
+        }
+        return { ok: true, endpoint: "/upload/compressed", kind: "archive" };
+    }
+
+    return {
+        ok: false,
+        message: "Unsupported file type. Please upload an image or a supported archive."
+    };
+    }
+
+    function displayResults(data) {
+        resultContainer.innerHTML = '';
+
+        const results = data.analysis || [];
+        
+        if (!results || results.length === 0) {
+            resultContainer.innerHTML = '<p>No results to display.</p>';
+            return;
+        }
+
+        results.forEach(item => {
+            const resultDiv = document.createElement('div');
+            resultDiv.className = 'result-item';
+            
+            const filename = item.filename || item.name || 'Unknown file';
+            const predictedClass = item.predicted_class || item.class || item.prediction || 'Unknown';
+            const imageData = item.image_data || '';
+            const camData = item.cam_data || '';
+            
+            resultDiv.innerHTML = `
+                <div class="filename">${filename}</div>
+                <div class="class">Class: ${predictedClass}</div>
+            `;
+            
+            const filenameDiv = resultDiv.querySelector('.filename');
+            if (imageData && camData) {
+                filenameDiv.style.cursor = 'pointer';
+                filenameDiv.addEventListener('click', () => {
+                    showImageModal(imageData, camData);
+                });
+            } else {
+                filenameDiv.style.cursor = 'default';
+                filenameDiv.style.textDecoration = 'none';
+            }
+            
+            resultContainer.appendChild(resultDiv);
+        });
+
+        if (data.processing_time) {
+            const footer = document.createElement('p');
+            footer.style.marginTop = '1rem';
+            footer.style.fontSize = '0.9rem';
+            footer.style.color = 'var(--muted-color)';
+            footer.textContent = `Processed in ${data.processing_time.toFixed(2)} seconds`;
+            resultContainer.appendChild(footer);
+        }
+    }
+
+    // ---- fetch with timeout + single retry on network failure ----
+    async function fetchWithTimeout(url, options, timeoutMs = FETCH_TIMEOUT_MS) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal,
+            });
+            return response;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    async function fetchWithRetry(url, options, { timeoutMs = FETCH_TIMEOUT_MS, retries = 1 } = {}) {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                return await fetchWithTimeout(url, options, timeoutMs);
+            } catch (err) {
+                const isLastAttempt = attempt === retries;
+                // Only retry on network / abort errors, not HTTP errors
+                if (isLastAttempt) throw err;
+                console.warn(`Attempt ${attempt + 1} failed (${err.message}), retrying…`);
+                // Brief pause before retry to let cold-start finish
+                await new Promise(r => setTimeout(r, 2000));
+            }
+        }
+    }
+
+    // Get Started button → open file picker
+    btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        fileInput.click();
+    });
+
+    // Immediate feedback when file is selected
+    fileInput.addEventListener("change", () => {
+    if (!fileInput.files.length) return;
+
+    const file = fileInput.files[0];
+    const result = validateSelectedFile(file);
+
+    if (!result.ok) {
+        warnUser(result.message);
+        fileInput.value = "";
+        return;
+    }
+
+    resultContainer.innerHTML =
+        result.kind === "image"
+        ? "<p>Detected single image upload.</p>"
+        : "<p>Detected archive upload (batch processing).</p>";
+    });
+
+
+    // Form submission
+    form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const file = fileInput.files[0];
+    const result = validateSelectedFile(file);
+
+    if (!result.ok) {
+        warnUser(result.message);
+        fileInput.value = "";
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    showWaitingScreen();
+    resultContainer.innerHTML = "<p>Uploading and processing…</p>";
+
+    try {
+        const fullUrl = `${API_BASE_URL || ''}${result.endpoint}`;
+        console.log("Attempting to fetch:", fullUrl);
+        console.log("File:", file.name, file.size, "bytes");
+        
+        const response = await fetchWithRetry(fullUrl, {
+            method: "POST",
+            body: formData,
+        });
+        
+        console.log("Response received:", response.status);
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || "Upload failed");
+        }
+
+        const data = await response.json();
+        displayResults(data);
+    } catch (err) {
+        if (err.name === "AbortError") {
+            warnUser("Request timed out. The server may be starting up — please try again in a moment.");
+        } else {
+            warnUser(`Error: ${err.message}`);
+        }
+        fileInput.value = "";
+    } finally {
+        hideWaitingScreen();
+    }
+    });
+
+    </script>
+  </body>
+</html>
